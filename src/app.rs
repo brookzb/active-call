@@ -791,18 +791,29 @@ impl AppStateBuilder {
             },
         };
 
+        let external = config
+            .external_ip
+            .as_ref()
+            .map(|ip| {
+                format!("{}:{}", ip, actual_addr.port())
+                    .parse()
+                    .map_err(|e| anyhow::anyhow!("Failed to parse external address: {}", e))
+            })
+            .transpose()?;
+
         let udp_conn = rsipstack::transport::udp::UdpConnection::attach(
             udp_inner,
-            None,
+            external,
             Some(token.child_token()),
         )
         .await;
 
-        transport_layer.add_transport(udp_conn.into());
         info!(
             "start useragent, addr: {} (SO_REUSEPORT enabled)",
-            local_addr
+            udp_conn.get_addr()
         );
+
+        transport_layer.add_transport(udp_conn.into());
 
         // Optional SIP over TLS transport
         if let Some(tls_port) = config.tls_port {
