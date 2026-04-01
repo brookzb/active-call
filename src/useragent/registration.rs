@@ -1,8 +1,8 @@
 use anyhow::Result;
-use rsip::{HostWithPort, Response, StatusCodeKind, Transport};
+use rsipstack::rsip::{HostWithPort, Response, StatusCodeKind, Transport};
+use rsipstack::transport::SipAddr;
 use rsipstack::{
     dialog::{authenticate::Credential, registration::Registration},
-    rsip_ext::RsipResponseExt, transport::SipAddr,
 };
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -69,9 +69,9 @@ impl RegistrationHandle {
 
     pub async fn do_register(
         &mut self,
-        sip_server: &rsip::Uri,
+        sip_server: &rsipstack::rsip::Uri,
         expires: Option<u32>,
-        contact: &rsip::typed::Contact,
+        contact: &rsipstack::rsip::typed::Contact,
     ) -> Result<(u32, Option<HostWithPort>)> {
         self.registration.contact = Some(contact.clone());
         let resp = match self

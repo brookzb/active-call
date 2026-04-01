@@ -1,74 +1,75 @@
+use rsipstack::transport::SipAddr;
 use arc_swap::ArcSwap;
-use rsip::{headers::ToTypedHeader, prelude::HeadersExt};
+use rsipstack::rsip::{headers::ToTypedHeader, prelude::HeadersExt};
 use rsipstack::{
-    rsip_ext::RsipResponseExt, transaction::endpoint::MessageInspector, transport::SipAddr,
+    transaction::endpoint::MessageInspector,
 };
 use std::{net::IpAddr, sync::Arc};
 
-pub type SharedPublicAddress = Arc<ArcSwap<rsip::HostWithPort>>;
+pub type SharedPublicAddress = Arc<ArcSwap<rsipstack::rsip::HostWithPort>>;
 
-pub fn normalize_transport(transport: Option<&rsip::Transport>) -> rsip::Transport {
-    transport.cloned().unwrap_or(rsip::Transport::Udp)
+pub fn normalize_transport(transport: Option<&rsipstack::rsip::Transport>) -> rsipstack::rsip::Transport {
+    transport.cloned().unwrap_or(rsipstack::rsip::Transport::Udp)
 }
 
-pub fn transport_for_uri(uri: &rsip::Uri) -> rsip::Transport {
-    if matches!(uri.scheme, Some(rsip::Scheme::Sips)) {
-        return rsip::Transport::Tls;
+pub fn transport_for_uri(uri: &rsipstack::rsip::Uri) -> rsipstack::rsip::Transport {
+    if matches!(uri.scheme, Some(rsipstack::rsip::Scheme::Sips)) {
+        return rsipstack::rsip::Transport::Tls;
     }
 
     uri.params
         .iter()
         .find_map(|param| match param {
-            rsip::Param::Transport(transport) => Some(transport.clone()),
+            rsipstack::rsip::Param::Transport(transport) => Some(transport.clone()),
             _ => None,
         })
-        .unwrap_or(rsip::Transport::Udp)
+        .unwrap_or(rsipstack::rsip::Transport::Udp)
 }
 
-pub fn find_local_addr_for_uri(addrs: &[SipAddr], uri: &rsip::Uri) -> Option<SipAddr> {
+pub fn find_local_addr_for_uri(addrs: &[SipAddr], uri: &rsipstack::rsip::Uri) -> Option<SipAddr> {
     let transport = transport_for_uri(uri);
     addrs.iter()
         .find(|addr| normalize_transport(addr.r#type.as_ref()) == transport)
         .cloned()
 }
 
-pub fn contact_needs_public_resolution(contact: &rsip::Uri) -> bool {
+pub fn contact_needs_public_resolution(contact: &rsipstack::rsip::Uri) -> bool {
     if contact.scheme.is_none() {
         return true;
     }
 
     match &contact.host_with_port.host {
-        rsip::Host::Domain(domain) => {
+        rsipstack::rsip::Host::Domain(domain) => {
             let host = domain.to_string();
             host.eq_ignore_ascii_case("localhost")
         }
-        rsip::Host::IpAddr(ip) => is_local_or_unspecified(ip),
+        rsipstack::rsip::Host::IpAddr(ip) => is_local_or_unspecified(ip),
     }
 }
 
 pub fn build_contact_uri(
     local_addr: &SipAddr,
-    learned_addr: Option<rsip::HostWithPort>,
+    learned_addr: Option<rsipstack::rsip::HostWithPort>,
     username: Option<&str>,
-    template: Option<&rsip::Uri>,
-) -> rsip::Uri {
+    template: Option<&rsipstack::rsip::Uri>,
+) -> rsipstack::rsip::Uri {
     let mut uri = template
         .cloned()
-        .unwrap_or_else(|| rsip::Uri::from(local_addr));
+        .unwrap_or_else(|| rsipstack::rsip::Uri::from(local_addr));
 
     uri.host_with_port = learned_addr.unwrap_or_else(|| local_addr.addr.clone());
     if uri.scheme.is_none() {
         uri.scheme = Some(match local_addr.r#type {
-            Some(rsip::Transport::Tls)
-            | Some(rsip::Transport::Wss)
-            | Some(rsip::Transport::TlsSctp) => rsip::Scheme::Sips,
-            _ => rsip::Scheme::Sip,
+            Some(rsipstack::rsip::Transport::Tls)
+            | Some(rsipstack::rsip::Transport::Wss)
+            | Some(rsipstack::rsip::Transport::TlsSctp) => rsipstack::rsip::Scheme::Sips,
+            _ => rsipstack::rsip::Scheme::Sip,
         });
     }
 
     if uri.auth.is_none() {
         if let Some(username) = username.filter(|value| !value.is_empty()) {
-            uri.auth = Some(rsip::Auth {
+            uri.auth = Some(rsipstack::rsip::Auth {
                 user: username.to_string(),
                 password: None,
             });
@@ -80,12 +81,12 @@ pub fn build_contact_uri(
 
 pub fn build_contact(
     local_addr: &SipAddr,
-    contact_address: Option<rsip::HostWithPort>,
+    contact_address: Option<rsipstack::rsip::HostWithPort>,
     username: Option<&str>,
-    template: Option<&rsip::Uri>,
-) -> rsip::typed::Contact {
+    template: Option<&rsipstack::rsip::Uri>,
+) -> rsipstack::rsip::typed::Contact {
     let contact_uri = build_contact_uri(local_addr, contact_address, username, template);
-    rsip::typed::Contact {
+    rsipstack::rsip::typed::Contact {
         display_name: None,
         uri: contact_uri,
         params: vec![],
@@ -97,10 +98,10 @@ pub fn build_public_contact_uri(
     auto_learn_public_address: bool,
     local_addr: &SipAddr,
     username: Option<&str>,
-    template: Option<&rsip::Uri>,
-) -> rsip::Uri {
+    template: Option<&rsipstack::rsip::Uri>,
+) -> rsipstack::rsip::Uri {
     let selected_addr = if auto_learn_public_address
-        && normalize_transport(local_addr.r#type.as_ref()) == rsip::Transport::Udp
+        && normalize_transport(local_addr.r#type.as_ref()) == rsipstack::rsip::Transport::Udp
     {
         Some(learned_public_address.load_full().as_ref().clone())
     } else {
@@ -116,7 +117,7 @@ pub struct LearningMessageInspector {
 
 impl LearningMessageInspector {
     pub fn new(
-        initial_address: rsip::HostWithPort,
+        initial_address: rsipstack::rsip::HostWithPort,
         next: Option<Box<dyn MessageInspector>>,
     ) -> Self {
         Self {
@@ -131,7 +132,7 @@ impl LearningMessageInspector {
 }
 
 impl MessageInspector for LearningMessageInspector {
-    fn before_send(&self, msg: rsip::SipMessage, dest: Option<&SipAddr>) -> rsip::SipMessage {
+    fn before_send(&self, msg: rsipstack::rsip::SipMessage, dest: Option<&SipAddr>) -> rsipstack::rsip::SipMessage {
         if let Some(next) = &self.next {
             next.before_send(msg, dest)
         } else {
@@ -139,15 +140,15 @@ impl MessageInspector for LearningMessageInspector {
         }
     }
 
-    fn after_received(&self, msg: rsip::SipMessage, from: &SipAddr) -> rsip::SipMessage {
-        if let rsip::SipMessage::Response(response) = &msg
+    fn after_received(&self, msg: rsipstack::rsip::SipMessage, from: &SipAddr) -> rsipstack::rsip::SipMessage {
+        if let rsipstack::rsip::SipMessage::Response(response) = &msg
             && let Ok(via) = response.via_header()
             && let Ok(via) = via.typed()
-            && via.transport == rsip::Transport::Udp
+            && via.transport == rsipstack::rsip::Transport::Udp
             && let Some(host_with_port) = response.via_received()
         {
             self.learned_public_address
-                .rcu(|previous: &Arc<rsip::HostWithPort>| {
+                .rcu(|previous: &Arc<rsipstack::rsip::HostWithPort>| {
                     if should_update_address(previous.as_ref(), &host_with_port) {
                         Arc::new(host_with_port.clone())
                     } else {
@@ -165,8 +166,8 @@ impl MessageInspector for LearningMessageInspector {
 }
 
 pub fn should_update_address(
-    previous: &rsip::HostWithPort,
-    current: &rsip::HostWithPort,
+    previous: &rsipstack::rsip::HostWithPort,
+    current: &rsipstack::rsip::HostWithPort,
 ) -> bool {
     if previous == current {
         return false;
@@ -178,10 +179,10 @@ pub fn should_update_address(
         || (previous_is_public && current_is_public && previous != current)
 }
 
-fn is_public_address(host_with_port: &rsip::HostWithPort) -> bool {
+fn is_public_address(host_with_port: &rsipstack::rsip::HostWithPort) -> bool {
     match &host_with_port.host {
-        rsip::Host::Domain(domain) => !domain.to_string().eq_ignore_ascii_case("localhost"),
-        rsip::Host::IpAddr(ip) => !is_local_or_unspecified(ip),
+        rsipstack::rsip::Host::Domain(domain) => !domain.to_string().eq_ignore_ascii_case("localhost"),
+        rsipstack::rsip::Host::IpAddr(ip) => !is_local_or_unspecified(ip),
     }
 }
 
@@ -197,14 +198,14 @@ mod tests {
         transport_for_uri,
     };
     use arc_swap::ArcSwap;
-    use rsip::transport::Transport;
+    use rsipstack::rsip::transport::Transport;
     use rsipstack::transaction::endpoint::MessageInspector;
     use rsipstack::transport::SipAddr;
     use std::sync::Arc;
 
     #[test]
     fn learns_public_address_from_response_via() {
-        let response: rsip::Response = concat!(
+        let response: rsipstack::rsip::Response = concat!(
             "SIP/2.0 401 Unauthorized\r\n",
             "Via: SIP/2.0/UDP 10.0.0.1:5060;branch=z9hG4bK-1;received=203.0.113.10;rport=62000\r\n",
             "Content-Length: 0\r\n",
@@ -222,7 +223,7 @@ mod tests {
         );
         let cache = inspector.shared_public_address();
         inspector.after_received(
-            rsip::SipMessage::Response(response),
+            rsipstack::rsip::SipMessage::Response(response),
             &SipAddr {
                 r#type: Some(Transport::Udp),
                 addr: "10.0.0.1:5060"
@@ -243,7 +244,7 @@ mod tests {
                 .unwrap()
                 .into(),
         };
-        let template: rsip::Uri = "sip:alice@127.0.0.1:5060".try_into().unwrap();
+        let template: rsipstack::rsip::Uri = "sip:alice@127.0.0.1:5060".try_into().unwrap();
         let learned_addr = Some(
             "203.0.113.10:62000"
                 .parse::<std::net::SocketAddr>()
@@ -257,8 +258,8 @@ mod tests {
 
     #[test]
     fn identifies_contacts_that_need_resolution() {
-        let local_contact: rsip::Uri = "sip:alice@127.0.0.1:5060".try_into().unwrap();
-        let remote_contact: rsip::Uri = "sip:alice@203.0.113.10:62000".try_into().unwrap();
+        let local_contact: rsipstack::rsip::Uri = "sip:alice@127.0.0.1:5060".try_into().unwrap();
+        let remote_contact: rsipstack::rsip::Uri = "sip:alice@203.0.113.10:62000".try_into().unwrap();
         assert!(contact_needs_public_resolution(&local_contact));
         assert!(!contact_needs_public_resolution(&remote_contact));
     }
@@ -282,7 +283,7 @@ mod tests {
             },
         ];
 
-        let uri: rsip::Uri = "sips:alice@example.com".try_into().unwrap();
+        let uri: rsipstack::rsip::Uri = "sips:alice@example.com".try_into().unwrap();
         let selected = find_local_addr_for_uri(&addrs, &uri).unwrap();
 
         assert_eq!(selected.to_string(), "TLS 10.0.0.5:5061");
@@ -353,19 +354,19 @@ mod tests {
 
     #[test]
     fn infers_transport_from_uri() {
-        let sips_uri: rsip::Uri = "sips:alice@example.com".try_into().unwrap();
-        let tcp_uri: rsip::Uri = "sip:alice@example.com;transport=tcp".try_into().unwrap();
+        let sips_uri: rsipstack::rsip::Uri = "sips:alice@example.com".try_into().unwrap();
+        let tcp_uri: rsipstack::rsip::Uri = "sip:alice@example.com;transport=tcp".try_into().unwrap();
         assert_eq!(transport_for_uri(&sips_uri), Transport::Tls);
         assert_eq!(transport_for_uri(&tcp_uri), Transport::Tcp);
     }
 
     #[test]
     fn updates_learned_address_from_local_to_public() {
-        let previous: rsip::HostWithPort = "127.0.0.1:5060"
+        let previous: rsipstack::rsip::HostWithPort = "127.0.0.1:5060"
             .parse::<std::net::SocketAddr>()
             .unwrap()
             .into();
-        let current: rsip::HostWithPort = "203.0.113.10:62000"
+        let current: rsipstack::rsip::HostWithPort = "203.0.113.10:62000"
             .parse::<std::net::SocketAddr>()
             .unwrap()
             .into();
@@ -375,7 +376,7 @@ mod tests {
 
     #[test]
     fn does_not_update_learned_address_when_unchanged() {
-        let current: rsip::HostWithPort = "203.0.113.10:62000"
+        let current: rsipstack::rsip::HostWithPort = "203.0.113.10:62000"
             .parse::<std::net::SocketAddr>()
             .unwrap()
             .into();

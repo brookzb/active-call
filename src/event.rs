@@ -13,7 +13,7 @@ pub struct Attendee {
 
 impl From<&String> for Attendee {
     fn from(source: &String) -> Self {
-        let uri = rsip::Uri::try_from(source.as_str()).unwrap_or_default();
+        let uri = rsipstack::rsip::Uri::try_from(source.as_str()).unwrap_or_default();
         Self {
             username: uri.user().unwrap_or_default().to_string(),
             realm: uri.host().to_string(),

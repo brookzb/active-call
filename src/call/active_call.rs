@@ -923,7 +923,7 @@ impl ActiveCall {
                 "ready to answer with track"
             );
 
-            let headers = vec![rsip::Header::ContentType(
+            let headers = vec![rsipstack::rsip::Header::ContentType(
                 "application/sdp".to_string().into(),
             )];
 
@@ -947,7 +947,7 @@ impl ActiveCall {
 
     async fn do_reject(
         &self,
-        code: Option<rsip::StatusCode>,
+        code: Option<rsipstack::rsip::StatusCode>,
         reason: Option<String>,
     ) -> Result<()> {
         match self
@@ -985,7 +985,7 @@ impl ActiveCall {
         let state = self.call_state.read().await;
         if let Some((answer, _, dialog)) = state.ready_to_answer.as_ref() {
             let (headers, body) = if early_media.unwrap_or_default() || ringtone.is_some() {
-                let headers = vec![rsip::Header::ContentType(
+                let headers = vec![rsipstack::rsip::Header::ContentType(
                     "application/sdp".to_string().into(),
                 )];
                 (Some(headers), Some(answer.as_bytes().to_vec()))
@@ -1313,13 +1313,13 @@ impl ActiveCall {
             let cs = self.call_state.read().await;
             if let Some(opt) = cs.option.as_ref() {
                 if let Some(callee) = opt.callee.as_ref() {
-                    headers.push(rsip::Header::Other(
+                    headers.push(rsipstack::rsip::Header::Other(
                         "X-Referred-To".to_string(),
                         callee.clone(),
                     ));
                 }
                 if let Some(caller) = opt.caller.as_ref() {
-                    headers.push(rsip::Header::Other(
+                    headers.push(rsipstack::rsip::Header::Other(
                         "X-Referred-From".to_string(),
                         caller.clone(),
                     ));
@@ -1327,7 +1327,7 @@ impl ActiveCall {
             }
         }
 
-        headers.push(rsip::Header::Other(
+        headers.push(rsipstack::rsip::Header::Other(
             "X-Referred-Id".to_string(),
             self.session_id.clone(),
         ));
@@ -1622,8 +1622,8 @@ impl ActiveCall {
             .map(|headers_map| {
                 headers_map
                     .iter()
-                    .map(|(k, v)| rsip::Header::Other(k.clone(), v.clone()))
-                    .collect::<Vec<rsip::Header>>()
+                    .map(|(k, v)| rsipstack::rsip::Header::Other(k.clone(), v.clone()))
+                    .collect::<Vec<rsipstack::rsip::Header>>()
             });
         self.call_state.write().await.option = Some(option.clone());
         info!(
@@ -2138,8 +2138,8 @@ impl ActiveCall {
             .map(|headers_map| {
                 headers_map
                     .iter()
-                    .map(|(k, v)| rsip::Header::Other(k.clone(), v.clone()))
-                    .collect::<Vec<rsip::Header>>()
+                    .map(|(k, v)| rsipstack::rsip::Header::Other(k.clone(), v.clone()))
+                    .collect::<Vec<rsipstack::rsip::Header>>()
             });
 
         let mut client_dialog_handler = DialogStateReceiverGuard::new(
@@ -2217,7 +2217,7 @@ impl ActiveCall {
                         return Err(rsipstack::Error::DialogError(
                             "No answer received".to_string(),
                             dialog_id,
-                            rsip::StatusCode::NotAcceptableHere,
+                            rsipstack::rsip::StatusCode::NotAcceptableHere,
                         ));
                     }
                 }
@@ -2309,7 +2309,7 @@ impl ActiveCall {
         call_state_ref: ActiveCallStateRef,
         track_id: &String,
         pending_dialog: PendingDialog,
-        hangup_headers: Option<Vec<rsip::Header>>,
+        hangup_headers: Option<Vec<rsipstack::rsip::Header>>,
     ) -> Result<()> {
         let state_receiver = pending_dialog.state_receiver;
         //let pending_token_clone = pending_dialog.token;

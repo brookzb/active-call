@@ -5,7 +5,7 @@ use crate::{
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use regex::Regex;
-use rsip::prelude::HeadersExt;
+use rsipstack::rsip::prelude::HeadersExt;
 use rsipstack::dialog::server_dialog::ServerInviteDialog;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -87,11 +87,11 @@ impl PlaybookInvitationHandler {
     }
 
     fn extract_custom_headers(
-        headers: &rsip::Headers,
+        headers: &rsipstack::rsip::Headers,
     ) -> std::collections::HashMap<String, serde_json::Value> {
         let mut extras = std::collections::HashMap::new();
         for header in headers.iter() {
-            if let rsip::Header::Other(name, value) = header {
+            if let rsipstack::rsip::Header::Other(name, value) = header {
                 // Capture all custom headers, Playbook logic can filter them later using `sip.extract_headers` if needed
                 extras.insert(
                     name.to_string(),
@@ -164,7 +164,7 @@ impl InvitationHandler for PlaybookInvitationHandler {
                         if !path.exists() {
                             warn!(session_id, path=?path, "Playbook file not found, rejecting SIP call");
                             if let Err(e) = dialog.reject(
-                                Some(rsip::StatusCode::ServiceUnavailable),
+                                Some(rsipstack::rsip::StatusCode::ServiceUnavailable),
                                 Some("Playbook Not Found".to_string()),
                             ) {
                                 warn!(session_id, "Failed to reject SIP dialog: {}", e);
@@ -252,7 +252,7 @@ impl InvitationHandler for PlaybookInvitationHandler {
                     let sip_headers = headers.map(|h_map| {
                         h_map
                             .into_iter()
-                            .map(|(k, v)| rsip::Header::Other(k.into(), v.into()))
+                            .map(|(k, v)| rsipstack::rsip::Header::Other(k.into(), v.into()))
                             .collect::<Vec<_>>()
                     });
 
@@ -429,9 +429,9 @@ mod tests {
 
     #[test]
     fn test_extract_custom_headers() {
-        use rsip::Header;
+        use rsipstack::rsip::Header;
 
-        let mut headers = rsip::Headers::default();
+        let mut headers = rsipstack::rsip::Headers::default();
         headers.push(Header::ContentLength(10.into())); // Standard header (ignored)
         headers.push(Header::Other("X-Tenant-ID".into(), "123".into()));
         headers.push(Header::Other("Custom-Header".into(), "xyz".into()));

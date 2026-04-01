@@ -25,7 +25,7 @@ use arc_swap::ArcSwap;
 use chrono::{DateTime, Local};
 use futures::FutureExt;
 use humantime::parse_duration;
-use rsip::prelude::HeadersExt;
+use rsipstack::rsip::prelude::HeadersExt;
 use rsipstack::transaction::{
     Endpoint, TransactionReceiver,
     endpoint::{TargetLocator, TransportEventInspector},
@@ -235,7 +235,7 @@ impl AppStateInner {
                     None => {
                         info!("dialog not found: {}", tx.original);
                         match tx
-                            .reply(rsip::StatusCode::CallTransactionDoesNotExist)
+                            .reply(rsipstack::rsip::StatusCode::CallTransactionDoesNotExist)
                             .await
                         {
                             Ok(_) => (),
@@ -250,14 +250,14 @@ impl AppStateInner {
             // out dialog, new server dialog
             let (state_sender, state_receiver) = dialog_layer.new_dialog_state_channel();
             match tx.original.method {
-                rsip::Method::Invite | rsip::Method::Ack => {
+                rsipstack::rsip::Method::Invite | rsipstack::rsip::Method::Ack => {
                     // Reject new INVITEs during graceful shutdown
                     if self.shutting_down.load(Ordering::Relaxed) {
                         info!(?key, "rejecting INVITE during graceful shutdown");
                         match tx
                             .reply_with(
-                                rsip::StatusCode::ServiceUnavailable,
-                                vec![rsip::Header::Other(
+                                rsipstack::rsip::StatusCode::ServiceUnavailable,
+                                vec![rsipstack::rsip::Header::Other(
                                     "Reason".into(),
                                     "SIP;cause=503;text=\"Server shutting down\"".into(),
                                 )],
@@ -288,8 +288,8 @@ impl AppStateInner {
                             info!(?key, "no invite handler configured, rejecting INVITE");
                             match tx
                                 .reply_with(
-                                    rsip::StatusCode::ServiceUnavailable,
-                                    vec![rsip::Header::Other(
+                                    rsipstack::rsip::StatusCode::ServiceUnavailable,
+                                    vec![rsipstack::rsip::Header::Other(
                                         "Reason".into(),
                                         "SIP;cause=503;text=\"No invite handler configured\""
                                             .into(),
@@ -334,7 +334,7 @@ impl AppStateInner {
                             // 481 Dialog/Transaction Does Not Exist
                             info!("failed to obtain dialog: {:?}", e);
                             match tx
-                                .reply(rsip::StatusCode::CallTransactionDoesNotExist)
+                                .reply(rsipstack::rsip::StatusCode::CallTransactionDoesNotExist)
                                 .await
                             {
                                 Ok(_) => (),
@@ -400,7 +400,7 @@ impl AppStateInner {
                                     info!(id = dialog_id_str, "error handling invite: {:?}", e);
                                     let reason = format!("Failed to process invite: {}", e);
                                     if let Err(reject_err) = dialog_for_reject.reject(
-                                        Some(rsip::StatusCode::ServiceUnavailable),
+                                        Some(rsipstack::rsip::StatusCode::ServiceUnavailable),
                                         Some(reason),
                                     ) {
                                         info!(
@@ -422,13 +422,13 @@ impl AppStateInner {
                         }
                     });
                 }
-                rsip::Method::Options => {
+                rsipstack::rsip::Method::Options => {
                     info!(?key, "ignoring out-of-dialog OPTIONS request");
                     continue;
                 }
                 _ => {
                     info!(?key, "received request: {:?}", tx.original.method);
-                    match tx.reply(rsip::StatusCode::OK).await {
+                    match tx.reply(rsipstack::rsip::StatusCode::OK).await {
                         Ok(_) => (),
                         Err(e) => {
                             info!("error replying to request: {:?}", e);
@@ -492,7 +492,7 @@ impl AppStateInner {
             callee_uri.to_string()
         };
 
-        let parsed_callee = match rsip::Uri::try_from(callee_uri.as_str()) {
+        let parsed_callee = match rsipstack::rsip::Uri::try_from(callee_uri.as_str()) {
             Ok(uri) => uri,
             Err(e) => {
                 warn!("failed to parse callee URI: {} {:?}", callee, e);
@@ -501,8 +501,8 @@ impl AppStateInner {
         };
 
         let callee_host = match &parsed_callee.host_with_port.host {
-            rsip::Host::Domain(domain) => domain.to_string(),
-            rsip::Host::IpAddr(ip) => return self.find_credentials_by_ip(ip),
+            rsipstack::rsip::Host::Domain(domain) => domain.to_string(),
+            rsipstack::rsip::Host::IpAddr(ip) => return self.find_credentials_by_ip(ip),
         };
 
         // Look through registered users to find one matching this domain
@@ -513,7 +513,7 @@ impl AppStateInner {
                     server = format!("sip:{}", server);
                 }
 
-                let parsed_server = match rsip::Uri::try_from(server.as_str()) {
+                let parsed_server = match rsipstack::rsip::Uri::try_from(server.as_str()) {
                     Ok(uri) => uri,
                     Err(e) => {
                         warn!("failed to parse server URI: {} {:?}", option.server, e);
@@ -522,10 +522,10 @@ impl AppStateInner {
                 };
 
                 let server_host = match &parsed_server.host_with_port.host {
-                    rsip::Host::Domain(domain) => domain.to_string(),
-                    rsip::Host::IpAddr(ip) => {
+                    rsipstack::rsip::Host::Domain(domain) => domain.to_string(),
+                    rsipstack::rsip::Host::IpAddr(ip) => {
                         // Compare IP addresses
-                        if let rsip::Host::IpAddr(callee_ip) = &parsed_callee.host_with_port.host {
+                        if let rsipstack::rsip::Host::IpAddr(callee_ip) = &parsed_callee.host_with_port.host {
                             if ip == callee_ip {
                                 if let Some(cred) = &option.credential {
                                     info!(
@@ -571,8 +571,8 @@ impl AppStateInner {
                     server = format!("sip:{}", server);
                 }
 
-                if let Ok(parsed_server) = rsip::Uri::try_from(server.as_str()) {
-                    if let rsip::Host::IpAddr(server_ip) = &parsed_server.host_with_port.host {
+                if let Ok(parsed_server) = rsipstack::rsip::Uri::try_from(server.as_str()) {
+                    if let rsipstack::rsip::Host::IpAddr(server_ip) = &parsed_server.host_with_port.host {
                         if server_ip == callee_ip {
                             if let Some(cred) = &option.credential {
                                 info!(
@@ -633,7 +633,7 @@ impl AppStateInner {
         if !server.starts_with("sip:") && !server.starts_with("sips:") {
             server = format!("sip:{}", server);
         }
-        let sip_server = match rsip::Uri::try_from(server) {
+        let sip_server = match rsipstack::rsip::Uri::try_from(server) {
             Ok(uri) => uri,
             Err(e) => {
                 warn!("failed to parse server: {} {:?}", e, option.server);
@@ -883,7 +883,7 @@ impl AppStateBuilder {
         let udp_inner = rsipstack::transport::udp::UdpInner {
             conn: tokio_socket,
             addr: rsipstack::transport::SipAddr {
-                r#type: Some(rsip::transport::Transport::Udp),
+                r#type: Some(rsipstack::rsip::transport::Transport::Udp),
                 addr: bind_addr.into(),
             },
         };
@@ -916,7 +916,7 @@ impl AppStateBuilder {
         if let Some(tls_port) = config.tls_port {
             let tls_addr: std::net::SocketAddr = format!("{}:{}", local_ip, tls_port).parse()?;
             let tls_sip_addr = rsipstack::transport::SipAddr {
-                r#type: Some(rsip::transport::Transport::Tls),
+                r#type: Some(rsipstack::rsip::transport::Transport::Tls),
                 addr: tls_addr.into(),
             };
             let mut tls_cfg = rsipstack::transport::tls::TlsConfig::default();
